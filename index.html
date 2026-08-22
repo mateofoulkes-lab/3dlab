@@ -58,26 +58,48 @@
         <button id="cleanView" disabled>Corregido</button>
       </div>
 
+      <div class="section-label">Reconstrucción industrial</div>
+
       <div class="control">
-        <div class="control-head"><label for="strength">Fuerza CAD</label><output id="strengthValue">65%</output></div>
-        <input id="strength" type="range" min="0" max="100" value="65" disabled />
-        <small>Cuánto se acercan las zonas planas detectadas a su plano ideal.</small>
+        <div class="control-head"><label for="strength">Fuerza CAD</label><output id="strengthValue">85%</output></div>
+        <input id="strength" type="range" min="0" max="100" value="85" disabled />
+        <small>Cuánto se acercan las zonas aceptadas a su superficie matemática ideal.</small>
       </div>
 
       <div class="control">
-        <div class="control-head"><label for="angle">Tolerancia de plano</label><output id="angleValue">12°</output></div>
-        <input id="angle" type="range" min="4" max="28" value="12" disabled />
-        <small>Más alto = acepta superficies más onduladas como un mismo plano.</small>
+        <div class="control-head"><label for="angle">Tolerancia angular</label><output id="angleValue">10°</output></div>
+        <input id="angle" type="range" min="3" max="24" value="10" disabled />
+        <small>Controla cuánto pueden variar las normales dentro de una misma región.</small>
       </div>
 
       <div class="control">
-        <div class="control-head"><label for="minRegion">Tamaño mínimo</label><output id="regionValue">60 caras</output></div>
-        <input id="minRegion" type="range" min="12" max="300" step="4" value="60" disabled />
-        <small>Evita convertir pequeños detalles del scan en superficies planas.</small>
+        <div class="control-head"><label for="confidence">Confianza de plano</label><output id="confidenceValue">72%</output></div>
+        <input id="confidence" type="range" min="20" max="100" value="72" disabled />
+        <small>Más alto = rechaza superficies dudosas o demasiado bumpy en vez de deformarlas.</small>
       </div>
+
+      <div class="control">
+        <div class="control-head"><label for="edgeProtect">Protección de aristas</label><output id="edgeValue">85%</output></div>
+        <input id="edgeProtect" type="range" min="0" max="100" value="85" disabled />
+        <small>Evita mover vértices compartidos con paredes, nervaduras y detalles vecinos.</small>
+      </div>
+
+      <div class="control">
+        <div class="control-head"><label for="minRegion">Tamaño mínimo</label><output id="regionValue">120 caras</output></div>
+        <input id="minRegion" type="range" min="20" max="500" step="10" value="120" disabled />
+        <small>Las regiones menores quedan intactas para preservar geometría fina.</small>
+      </div>
+
+      <label class="toggle-row">
+        <span>
+          <strong>Alinear caras paralelas</strong>
+          <small>Unifica la dirección de planos casi paralelos, como paredes de espesor constante.</small>
+        </span>
+        <input id="alignParallel" type="checkbox" checked disabled />
+      </label>
 
       <div class="actions">
-        <button id="analyzeBtn" class="primary wide" disabled>Analizar y corregir</button>
+        <button id="analyzeBtn" class="primary wide" disabled>Reconstruir superficies</button>
         <button id="resetBtn" class="ghost wide" disabled>Restaurar</button>
       </div>
 
