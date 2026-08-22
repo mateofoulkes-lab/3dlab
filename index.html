@@ -3,29 +3,23 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <meta name="theme-color" content="#111318" />
-  <meta name="description" content="3DLab: limpieza local de meshes 3D escaneados con enfoque hard-surface." />
+  <meta name="theme-color" content="#0c1016" />
+  <meta name="description" content="3DLab Mesh to CAD: reconstrucción geométrica local de meshes escaneados." />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="./styles.css" />
-  <title>3DLab</title>
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"
-    }
-  }
-  </script>
+  <title>3DLab · Mesh to CAD</title>
+  <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"}}</script>
 </head>
 <body>
   <header class="topbar">
     <div>
-      <div class="brand">3DLab</div>
-      <div class="subtitle">Scan → CAD cleanup</div>
+      <div class="brand">3DLab <span class="brand-mode">Mesh → CAD</span></div>
+      <div class="subtitle">Reverse engineering geométrico · local en tu dispositivo</div>
     </div>
     <div class="topbar-right">
-      <div id="versionBadge" class="version-badge" title="Versión instalada">v2.1</div>
-      <button id="installBtn" class="ghost hidden">Instalar</button>
+      <div id="versionBadge" class="version-badge">v3.0</div>
+      <button id="installBtn" class="ghost compact hidden">Instalar</button>
     </div>
   </header>
 
@@ -34,8 +28,8 @@
       <div id="viewer"></div>
       <div id="dropHint" class="drop-hint">
         <div class="drop-icon">⬡</div>
-        <strong>Abrí un GLB, GLTF, STL u OBJ</strong>
-        <span>El archivo se procesa localmente en este dispositivo.</span>
+        <strong>Convertí un scan en geometría CAD-like</strong>
+        <span>GLB, GLTF, STL u OBJ · sin uploads · el modelo nunca sale del dispositivo.</span>
         <button id="openBtn" class="primary">Elegir modelo</button>
       </div>
       <input id="fileInput" type="file" accept=".glb,.gltf,.stl,.obj,model/gltf-binary,model/gltf+json,model/stl,text/plain" hidden />
@@ -44,12 +38,16 @@
         <button id="fitBtn" class="round" title="Encuadrar">⌖</button>
         <button id="wireBtn" class="round" title="Wireframe">#</button>
       </div>
-      <div id="busy" class="busy hidden"><div class="spinner"></div><span>Procesando…</span></div>
+      <div id="busy" class="busy hidden">
+        <div class="spinner"></div>
+        <strong id="busyTitle">Reconstruyendo…</strong>
+        <span id="busyStage">Analizando topología</span>
+      </div>
     </section>
 
     <section class="panel">
       <div class="file-row">
-        <div>
+        <div class="file-copy">
           <div id="fileName" class="file-name">Sin modelo</div>
           <div id="meshStats" class="mesh-stats">—</div>
         </div>
@@ -57,69 +55,89 @@
       </div>
 
       <div class="segmented">
-        <button id="originalView" class="active" disabled>Original</button>
-        <button id="cleanView" disabled>Corregido</button>
+        <button id="originalView" class="active" disabled>Scan</button>
+        <button id="cleanView" disabled>Reconstruido</button>
       </div>
 
-      <div class="section-label">Reconstrucción industrial</div>
-
-      <div class="control">
-        <div class="control-head"><label for="strength">Fuerza CAD</label><output id="strengthValue">85%</output></div>
-        <input id="strength" type="range" min="0" max="100" value="85" disabled />
-        <small>Cuánto se acercan las zonas aceptadas a su superficie matemática ideal.</small>
+      <div class="mission-card">
+        <strong>Objetivo del motor</strong>
+        <span>Reemplazar ruido de escaneo por planos, paralelismos, esquinas rectas y geometría manufacturada consistente.</span>
       </div>
 
-      <div class="control">
-        <div class="control-head"><label for="angle">Tolerancia angular</label><output id="angleValue">10°</output></div>
-        <input id="angle" type="range" min="3" max="24" value="10" disabled />
-        <small>Controla cuánto pueden variar las normales dentro de una misma región.</small>
-      </div>
+      <div class="section-label">Geometría base</div>
 
       <div class="control">
-        <div class="control-head"><label for="confidence">Confianza de plano</label><output id="confidenceValue">72%</output></div>
-        <input id="confidence" type="range" min="20" max="100" value="72" disabled />
-        <small>Más alto = rechaza superficies dudosas o demasiado bumpy en vez de deformarlas.</small>
+        <div class="control-head"><label for="strength">Fuerza de reconstrucción</label><output id="strengthValue">100%</output></div>
+        <input id="strength" type="range" min="20" max="100" value="100" disabled />
+        <small>100% lleva las regiones confiables a su solución geométrica ideal.</small>
       </div>
 
       <div class="control">
-        <div class="control-head"><label for="edgeProtect">Protección de aristas</label><output id="edgeValue">85%</output></div>
-        <input id="edgeProtect" type="range" min="0" max="100" value="85" disabled />
-        <small>Evita mover vértices compartidos con paredes, nervaduras y detalles vecinos.</small>
+        <div class="control-head"><label for="angle">Tolerancia de plano</label><output id="angleValue">8°</output></div>
+        <input id="angle" type="range" min="3" max="20" value="8" disabled />
+        <small>Más bajo evita interpretar curvas y deformaciones como caras planas.</small>
       </div>
 
       <div class="control">
-        <div class="control-head"><label for="minRegion">Tamaño mínimo</label><output id="regionValue">120 caras</output></div>
-        <input id="minRegion" type="range" min="20" max="500" step="10" value="120" disabled />
-        <small>Las regiones menores quedan intactas para preservar geometría fina.</small>
+        <div class="control-head"><label for="confidence">Exigencia geométrica</label><output id="confidenceValue">82%</output></div>
+        <input id="confidence" type="range" min="35" max="98" value="82" disabled />
+        <small>Rechaza regiones cuyo error respecto del plano ideal sea demasiado grande.</small>
       </div>
+
+      <div class="control">
+        <div class="control-head"><label for="minRegion">Plano mínimo</label><output id="regionValue">160 caras</output></div>
+        <input id="minRegion" type="range" min="30" max="700" step="10" value="160" disabled />
+        <small>Los detalles menores quedan fuera de la inferencia de caras estructurales.</small>
+      </div>
+
+      <div class="section-label">Restricciones CAD</div>
 
       <label class="toggle-row">
-        <span>
-          <strong>Alinear caras paralelas</strong>
-          <small>Unifica la dirección de planos casi paralelos, como paredes de espesor constante.</small>
-        </span>
+        <span><strong>Familias paralelas</strong><small>Hace compartir dirección a caras que claramente fueron diseñadas paralelas.</small></span>
         <input id="alignParallel" type="checkbox" checked disabled />
       </label>
 
+      <label class="toggle-row">
+        <span><strong>Snap ortogonal 90°</strong><small>Cuando dos familias están casi a escuadra, reconstruye una perpendicularidad exacta.</small></span>
+        <input id="orthogonalSnap" type="checkbox" checked disabled />
+      </label>
+
+      <label class="toggle-row">
+        <span><strong>Aristas por intersección</strong><small>Dos planos a ~90° generan una línea ideal recta en vez de conservar un borde bumpy.</small></span>
+        <input id="sharpIntersections" type="checkbox" checked disabled />
+      </label>
+
+      <label class="toggle-row">
+        <span><strong>Analizar espesores</strong><small>Busca separaciones repetidas entre planos paralelos como candidatos a espesores nominales.</small></span>
+        <input id="detectThickness" type="checkbox" checked disabled />
+      </label>
+
+      <div class="control">
+        <div class="control-head"><label for="edgeProtect">Preservar zonas ambiguas</label><output id="edgeValue">55%</output></div>
+        <input id="edgeProtect" type="range" min="0" max="100" value="55" disabled />
+        <small>Reduce la corrección donde confluyen demasiadas superficies o la intención no está clara.</small>
+      </div>
+
       <div class="actions">
-        <button id="analyzeBtn" class="primary wide" disabled>Reconstruir superficies</button>
-        <button id="resetBtn" class="ghost wide" disabled>Restaurar</button>
+        <button id="analyzeBtn" class="primary wide" disabled>Mesh → CAD</button>
+        <button id="resetBtn" class="ghost wide" disabled>Restaurar scan</button>
       </div>
 
       <div id="resultCard" class="result-card hidden">
-        <strong id="resultTitle">Análisis terminado</strong>
+        <strong id="resultTitle">Reconstrucción terminada</strong>
         <span id="resultText"></span>
+        <div id="cadFacts" class="cad-facts"></div>
       </div>
 
       <div class="export-row">
         <button id="exportStlBtn" class="ghost" disabled>Guardar STL</button>
         <button id="exportObjBtn" class="ghost" disabled>Guardar OBJ</button>
       </div>
+      <p class="roadmap-note">v3 reconstruye planos y aristas. La etapa siguiente del motor es inferir y regenerar fillets/radios constantes sobre esas aristas.</p>
     </section>
   </main>
 
-  <footer>Sin uploads · sin servidor · procesamiento local</footer>
-
+  <footer>3DLab Mesh → CAD · procesamiento 100% local</footer>
   <script type="module" src="./app.js"></script>
 </body>
 </html>
