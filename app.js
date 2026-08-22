@@ -2,6 +2,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.m
 import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/controls/OrbitControls.js';
 import { STLLoader } from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/STLLoader.js';
 import { OBJLoader } from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/OBJLoader.js';
+import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/GLTFLoader.js';
 import { STLExporter } from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/exporters/STLExporter.js';
 import { OBJExporter } from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/exporters/OBJExporter.js';
 import { mergeGeometries, mergeVertices } from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/utils/BufferGeometryUtils.js';
@@ -138,16 +139,38 @@ exportObjBtn.addEventListener('click', exportOBJ);
 ['dragleave','drop'].forEach(type => viewer.addEventListener(type, e => { e.preventDefault(); viewer.classList.remove('dragging'); }));
 viewer.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) loadFile(f); });
 
+async function loadGLTF(buffer, ext) {
+  const loader = new GLTFLoader();
+  const payload = ext === 'gltf' ? new TextDecoder().decode(buffer) : buffer;
+  const gltf = await new Promise((resolve, reject) => loader.parse(payload, '', resolve, reject));
+  gltf.scene.updateMatrixWorld(true);
+
+  const geos = [];
+  gltf.scene.traverse(child => {
+    if (!child.isMesh || !child.geometry?.attributes?.position) return;
+    let g = child.geometry.clone();
+    if (g.index) g = g.toNonIndexed();
+    const p = g.attributes.position.clone();
+    const flattened = new THREE.BufferGeometry();
+    flattened.setAttribute('position', p);
+    flattened.applyMatrix4(child.matrixWorld);
+    geos.push(flattened);
+  });
+
+  if (!geos.length) throw new Error('El GLB/GLTF no contiene geometría de mesh.');
+  return geos.length === 1 ? geos[0] : mergeGeometries(geos, false);
+}
+
 async function loadFile(file) {
   const ext = file.name.split('.').pop().toLowerCase();
-  if (!['stl','obj'].includes(ext)) return alert('Por ahora 3DLab acepta STL y OBJ.');
+  if (!['stl','obj','glb','gltf'].includes(ext)) return alert('3DLab acepta GLB, GLTF, STL y OBJ.');
   setBusy(true);
   try {
     const buffer = await file.arrayBuffer();
     let geometry;
     if (ext === 'stl') {
       geometry = new STLLoader().parse(buffer);
-    } else {
+    } else if (ext === 'obj') {
       const text = new TextDecoder().decode(buffer);
       const obj = new OBJLoader().parse(text);
       obj.updateMatrixWorld(true);
@@ -162,6 +185,8 @@ async function loadFile(file) {
       });
       if (!geos.length) throw new Error('El OBJ no contiene geometría de mesh.');
       geometry = geos.length === 1 ? geos[0] : mergeGeometries(geos, false);
+    } else {
+      geometry = await loadGLTF(buffer, ext);
     }
 
     geometry = normalizeGeometry(geometry);
