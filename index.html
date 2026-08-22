@@ -18,7 +18,7 @@
       <div class="subtitle">Reverse engineering geométrico · local en tu dispositivo</div>
     </div>
     <div class="topbar-right">
-      <div id="versionBadge" class="version-badge">v3.1</div>
+      <div id="versionBadge" class="version-badge">v3.2</div>
       <button id="installBtn" class="ghost compact hidden">Instalar</button>
     </div>
   </header>
@@ -71,43 +71,22 @@
         </div>
 
         <div class="section-label">Geometría base</div>
-        <div class="control">
-          <div class="control-head"><label for="strength">Fuerza de reconstrucción</label><output id="strengthValue">100%</output></div>
-          <input id="strength" type="range" min="20" max="100" value="100" disabled />
-        </div>
-        <div class="control">
-          <div class="control-head"><label for="angle">Tolerancia de plano</label><output id="angleValue">8°</output></div>
-          <input id="angle" type="range" min="3" max="20" value="8" disabled />
-        </div>
-        <div class="control">
-          <div class="control-head"><label for="confidence">Exigencia geométrica</label><output id="confidenceValue">82%</output></div>
-          <input id="confidence" type="range" min="35" max="98" value="82" disabled />
-        </div>
-        <div class="control">
-          <div class="control-head"><label for="minRegion">Plano mínimo</label><output id="regionValue">160 caras</output></div>
-          <input id="minRegion" type="range" min="30" max="700" step="10" value="160" disabled />
-        </div>
+        <div class="control"><div class="control-head"><label for="strength">Fuerza de reconstrucción</label><output id="strengthValue">100%</output></div><input id="strength" type="range" min="20" max="100" value="100" disabled /></div>
+        <div class="control"><div class="control-head"><label for="angle">Tolerancia de plano</label><output id="angleValue">8°</output></div><input id="angle" type="range" min="3" max="20" value="8" disabled /></div>
+        <div class="control"><div class="control-head"><label for="confidence">Exigencia geométrica</label><output id="confidenceValue">82%</output></div><input id="confidence" type="range" min="35" max="98" value="82" disabled /></div>
+        <div class="control"><div class="control-head"><label for="minRegion">Plano mínimo</label><output id="regionValue">160 caras</output></div><input id="minRegion" type="range" min="30" max="700" step="10" value="160" disabled /></div>
 
         <div class="section-label">Restricciones CAD</div>
-        <label class="toggle-row emphasized">
-          <span><strong>Permitir planos inclinados</strong><small>Destildado: fuerza la lectura 2.5D, con caras horizontales o verticales respecto del eje de extrusión inferido.</small></span>
-          <input id="allowTiltedPlanes" type="checkbox" disabled />
-        </label>
+        <label class="toggle-row emphasized"><span><strong>Permitir planos inclinados</strong><small>Destildado: fuerza la lectura 2.5D, con caras horizontales o verticales respecto del eje de extrusión inferido.</small></span><input id="allowTiltedPlanes" type="checkbox" disabled /></label>
         <label class="toggle-row"><span><strong>Familias paralelas</strong><small>Unifica caras que probablemente fueron diseñadas paralelas.</small></span><input id="alignParallel" type="checkbox" checked disabled /></label>
         <label class="toggle-row"><span><strong>Snap ortogonal 90°</strong><small>Reconstruye perpendicularidades exactas.</small></span><input id="orthogonalSnap" type="checkbox" checked disabled /></label>
         <label class="toggle-row"><span><strong>Aristas por intersección</strong><small>Rectifica bordes bumpy entre planos aproximadamente perpendiculares.</small></span><input id="sharpIntersections" type="checkbox" checked disabled /></label>
         <label class="toggle-row"><span><strong>Analizar espesores</strong><small>Busca separaciones repetidas entre planos paralelos.</small></span><input id="detectThickness" type="checkbox" checked disabled /></label>
-        <div class="control">
-          <div class="control-head"><label for="edgeProtect">Preservar zonas ambiguas</label><output id="edgeValue">55%</output></div>
-          <input id="edgeProtect" type="range" min="0" max="100" value="55" disabled />
-        </div>
+        <div class="control"><div class="control-head"><label for="edgeProtect">Preservar zonas ambiguas</label><output id="edgeValue">55%</output></div><input id="edgeProtect" type="range" min="0" max="100" value="55" disabled /></div>
       </div>
 
       <div id="legacyControls" class="hidden">
-        <div class="mission-card legacy-card">
-          <strong>Motor anterior v2</strong>
-          <span>La versión simple que solo detectaba regiones planas y las proyectaba. Ahora se muestra sola, sin quedar mezclada visualmente con el scan.</span>
-        </div>
+        <div class="mission-card legacy-card"><strong>Motor anterior v2</strong><span>La versión simple que detecta regiones planas y las proyecta. En v3.2 el visor usa un único mesh: Scan y Procesado no pueden renderizarse simultáneamente.</span></div>
         <div class="control"><div class="control-head"><label for="legacyStrength">Fuerza CAD</label><output id="legacyStrengthValue">65%</output></div><input id="legacyStrength" type="range" min="0" max="100" value="65" disabled /></div>
         <div class="control"><div class="control-head"><label for="legacyAngle">Tolerancia de plano</label><output id="legacyAngleValue">12°</output></div><input id="legacyAngle" type="range" min="4" max="28" value="12" disabled /></div>
         <div class="control"><div class="control-head"><label for="legacyMinRegion">Tamaño mínimo</label><output id="legacyRegionValue">60 caras</output></div><input id="legacyMinRegion" type="range" min="12" max="300" step="4" value="60" disabled /></div>
@@ -118,21 +97,13 @@
         <button id="resetBtn" class="ghost wide" disabled>Restaurar scan</button>
       </div>
 
-      <div id="resultCard" class="result-card hidden">
-        <strong id="resultTitle">Procesamiento terminado</strong>
-        <span id="resultText"></span>
-        <div id="cadFacts" class="cad-facts"></div>
-      </div>
-
-      <div class="export-row">
-        <button id="exportStlBtn" class="ghost" disabled>Guardar STL</button>
-        <button id="exportObjBtn" class="ghost" disabled>Guardar OBJ</button>
-      </div>
+      <div id="resultCard" class="result-card hidden"><strong id="resultTitle">Procesamiento terminado</strong><span id="resultText"></span><div id="cadFacts" class="cad-facts"></div></div>
+      <div class="export-row"><button id="exportStlBtn" class="ghost" disabled>Guardar STL</button><button id="exportObjBtn" class="ghost" disabled>Guardar OBJ</button></div>
       <p class="roadmap-note">El siguiente paso del motor CAD es regenerar fillets/radios constantes después de reconstruir planos y aristas.</p>
     </section>
   </main>
 
   <footer>3DLab Mesh → CAD · procesamiento 100% local</footer>
-  <script type="module" src="./app.js"></script>
+  <script type="module" src="./app.js?v=3.2"></script>
 </body>
 </html>
