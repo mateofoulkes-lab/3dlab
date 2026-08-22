@@ -1,268 +1,92 @@
-self.onmessage = ({data}) => {
-  if (data.type !== 'clean') return;
-  try {
-    const started = performance.now();
-    const {
-      positions, indices, strength, angleDeg, minRegionFaces,
-      edgeProtection = 0.85, planeConfidence = 0.72, alignParallel = true
-    } = data;
-    const vertexCount = positions.length / 3;
-    const faceCount = indices.length / 3;
-    if (!vertexCount || !faceCount) throw new Error('Mesh vacío o inválido.');
+const rad=d=>d*Math.PI/180;
+const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+const norm=v=>{const l=Math.hypot(v[0],v[1],v[2])||1;return[v[0]/l,v[1]/l,v[2]/l]};
+const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const absDot=(a,b)=>Math.abs(dot(a,b));
 
-    const cosGrow = Math.cos(angleDeg * Math.PI / 180);
-    const cosSeed = Math.cos(Math.min(angleDeg * 1.22, 30) * Math.PI / 180);
-    const normals = new Float32Array(faceCount * 3);
-    const areas = new Float32Array(faceCount);
-    const vertexDegree = new Uint16Array(vertexCount);
+self.onmessage=({data})=>{
+ if(data.type!=='reconstruct')return;
+ try{
+  const started=performance.now();
+  const {positions,indices,strength,angleDeg,minRegionFaces,planeConfidence,edgeProtection,alignParallel,orthogonalSnap,sharpIntersections,detectThickness}=data;
+  const vertexCount=positions.length/3,faceCount=indices.length/3;if(!vertexCount||!faceCount)throw new Error('Mesh vacío o inválido.');
+  postMessage({type:'progress',stage:'Calculando normales y escala'});
 
-    for (let f = 0; f < faceCount; f++) {
-      const a = indices[f*3], b = indices[f*3+1], c = indices[f*3+2];
-      if (vertexDegree[a] < 65535) vertexDegree[a]++;
-      if (vertexDegree[b] < 65535) vertexDegree[b]++;
-      if (vertexDegree[c] < 65535) vertexDegree[c]++;
-      const ia=a*3, ib=b*3, ic=c*3;
-      const ax=positions[ia], ay=positions[ia+1], az=positions[ia+2];
-      const abx=positions[ib]-ax, aby=positions[ib+1]-ay, abz=positions[ib+2]-az;
-      const acx=positions[ic]-ax, acy=positions[ic+1]-ay, acz=positions[ic+2]-az;
-      let nx=aby*acz-abz*acy, ny=abz*acx-abx*acz, nz=abx*acy-aby*acx;
-      const len=Math.hypot(nx,ny,nz) || 1;
-      areas[f]=len*.5;
-      normals[f*3]=nx/len; normals[f*3+1]=ny/len; normals[f*3+2]=nz/len;
-    }
-
-    // Topología por arista. Mantener conectividad real es crucial para no mezclar caras cercanas que no pertenecen a la misma pieza.
-    const neighbors = new Int32Array(faceCount * 3);
-    neighbors.fill(-1);
-    const neighborCount = new Uint8Array(faceCount);
-    const edgeOwner = new Map();
-    const edgeKey = (a,b) => {
-      if (a>b) { const t=a; a=b; b=t; }
-      return a * vertexCount + b;
-    };
-    for (let f=0; f<faceCount; f++) {
-      const a=indices[f*3], b=indices[f*3+1], c=indices[f*3+2];
-      const e0a=a,e0b=b,e1a=b,e1b=c,e2a=c,e2b=a;
-      const ea=[e0a,e1a,e2a], eb=[e0b,e1b,e2b];
-      for (let e=0;e<3;e++) {
-        const key=edgeKey(ea[e],eb[e]);
-        const other=edgeOwner.get(key);
-        if (other === undefined) edgeOwner.set(key,f);
-        else if (other !== -1) {
-          const ca=neighborCount[f], cb=neighborCount[other];
-          if (ca<3 && cb<3) {
-            neighbors[f*3+ca]=other; neighborCount[f]=ca+1;
-            neighbors[other*3+cb]=f; neighborCount[other]=cb+1;
-          }
-          edgeOwner.set(key,-1);
-        }
-      }
-    }
-    edgeOwner.clear();
-
-    const visited = new Uint8Array(faceCount);
-    const queue = new Int32Array(faceCount);
-    const vertexStamp = new Uint32Array(vertexCount);
-    const incidence = new Uint16Array(vertexCount);
-    const touchedVerts = new Int32Array(vertexCount);
-    let stamp = 0;
-    let rejectedRegions = 0;
-
-    function smallestEigenVector(xx,xy,xz,yy,yz,zz) {
-      // Jacobi para matriz simétrica 3x3. Ocho barridos son suficientes para un ajuste de plano geométrico.
-      const A = [xx,xy,xz, xy,yy,yz, xz,yz,zz];
-      const V = [1,0,0, 0,1,0, 0,0,1];
-      for (let iter=0; iter<10; iter++) {
-        let p=0,q=1,max=Math.abs(A[1]);
-        if (Math.abs(A[2])>max) { p=0;q=2;max=Math.abs(A[2]); }
-        if (Math.abs(A[5])>max) { p=1;q=2;max=Math.abs(A[5]); }
-        if (max < 1e-12) break;
-        const app=A[p*3+p], aqq=A[q*3+q], apq=A[p*3+q];
-        const phi=.5*Math.atan2(2*apq,aqq-app);
-        const c=Math.cos(phi), s=Math.sin(phi);
-        for (let k=0;k<3;k++) {
-          const aik=A[p*3+k], aqk=A[q*3+k];
-          A[p*3+k]=c*aik-s*aqk; A[q*3+k]=s*aik+c*aqk;
-        }
-        for (let k=0;k<3;k++) {
-          const akp=A[k*3+p], akq=A[k*3+q];
-          A[k*3+p]=c*akp-s*akq; A[k*3+q]=s*akp+c*akq;
-        }
-        for (let k=0;k<3;k++) {
-          const vip=V[k*3+p], viq=V[k*3+q];
-          V[k*3+p]=c*vip-s*viq; V[k*3+q]=s*vip+c*viq;
-        }
-      }
-      let col=0;
-      if (A[4] < A[col*3+col]) col=1;
-      if (A[8] < A[col*3+col]) col=2;
-      let x=V[col], y=V[3+col], z=V[6+col];
-      const l=Math.hypot(x,y,z)||1;
-      return [x/l,y/l,z/l];
-    }
-
-    const regions=[];
-
-    for (let seed=0; seed<faceCount; seed++) {
-      if (visited[seed]) continue;
-      visited[seed]=1;
-      let head=0, tail=1;
-      queue[0]=seed;
-      const snx=normals[seed*3], sny=normals[seed*3+1], snz=normals[seed*3+2];
-      let sumNx=snx, sumNy=sny, sumNz=snz;
-
-      while (head<tail) {
-        const f=queue[head++];
-        const al=Math.hypot(sumNx,sumNy,sumNz)||1;
-        const anx=sumNx/al, any=sumNy/al, anz=sumNz/al;
-        for (let k=0;k<neighborCount[f];k++) {
-          const nb=neighbors[f*3+k];
-          if (nb<0 || visited[nb]) continue;
-          const nx=normals[nb*3], ny=normals[nb*3+1], nz=normals[nb*3+2];
-          const dotAvg=nx*anx+ny*any+nz*anz;
-          const dotSeed=nx*snx+ny*sny+nz*snz;
-          // Dos límites simultáneos evitan que una superficie curva "camine" gradualmente hasta parecer un plano enorme.
-          if (dotAvg>=cosGrow && dotSeed>=cosSeed) {
-            visited[nb]=1;
-            queue[tail++]=nb;
-            sumNx+=nx; sumNy+=ny; sumNz+=nz;
-          }
-        }
-      }
-
-      if (tail < minRegionFaces) continue;
-
-      stamp++;
-      if (stamp === 0xffffffff) { vertexStamp.fill(0); stamp=1; }
-      let uniqueCount=0,totalArea=0,avgNx=0,avgNy=0,avgNz=0;
-      for (let q=0;q<tail;q++) {
-        const f=queue[q], ar=areas[f]||1;
-        totalArea+=ar;
-        avgNx+=normals[f*3]*ar; avgNy+=normals[f*3+1]*ar; avgNz+=normals[f*3+2]*ar;
-        for (let j=0;j<3;j++) {
-          const v=indices[f*3+j];
-          if (vertexStamp[v]!==stamp) {
-            vertexStamp[v]=stamp; incidence[v]=1; touchedVerts[uniqueCount++]=v;
-          } else if (incidence[v] < 65535) incidence[v]++;
-        }
-      }
-
-      let cx=0,cy=0,cz=0;
-      for (let i=0;i<uniqueCount;i++) {
-        const vi=touchedVerts[i]*3;
-        cx+=positions[vi]; cy+=positions[vi+1]; cz+=positions[vi+2];
-      }
-      cx/=uniqueCount; cy/=uniqueCount; cz/=uniqueCount;
-
-      let xx=0,xy=0,xz=0,yy=0,yz=0,zz=0;
-      for (let i=0;i<uniqueCount;i++) {
-        const vi=touchedVerts[i]*3;
-        const x=positions[vi]-cx,y=positions[vi+1]-cy,z=positions[vi+2]-cz;
-        xx+=x*x; xy+=x*y; xz+=x*z; yy+=y*y; yz+=y*z; zz+=z*z;
-      }
-      let [pnx,pny,pnz]=smallestEigenVector(xx,xy,xz,yy,yz,zz);
-      if (pnx*avgNx+pny*avgNy+pnz*avgNz < 0) { pnx=-pnx;pny=-pny;pnz=-pnz; }
-      const planeD=cx*pnx+cy*pny+cz*pnz;
-
-      let sq=0,absSum=0,maxAbs=0;
-      for (let i=0;i<uniqueCount;i++) {
-        const vi=touchedVerts[i]*3;
-        const dist=positions[vi]*pnx+positions[vi+1]*pny+positions[vi+2]*pnz-planeD;
-        const ad=Math.abs(dist); sq+=dist*dist; absSum+=ad; if(ad>maxAbs)maxAbs=ad;
-      }
-      const rms=Math.sqrt(sq/uniqueCount);
-      const meanAbs=absSum/uniqueCount;
-      const meanArea=totalArea/tail;
-      const typicalEdge=Math.sqrt(Math.max(meanArea,1e-16)*2);
-      const rmsLimit=typicalEdge*(1.10-planeConfidence*.75);
-      const meanLimit=rmsLimit*.72;
-      if (rms>rmsLimit || meanAbs>meanLimit || maxAbs>rmsLimit*4.5) {
-        rejectedRegions++;
-        continue;
-      }
-
-      const verts=new Uint32Array(uniqueCount);
-      const membership=new Uint8Array(uniqueCount);
-      for(let i=0;i<uniqueCount;i++) {
-        const v=touchedVerts[i]; verts[i]=v;
-        const deg=vertexDegree[v]||1;
-        membership[i]=Math.min(255,Math.round(255*incidence[v]/deg));
-      }
-      regions.push({
-        faces:tail, area:totalArea, normal:[pnx,pny,pnz], center:[cx,cy,cz], d:planeD,
-        verts, membership, rms, typicalEdge
-      });
-    }
-
-    let parallelFamilies=0;
-    if (alignParallel && regions.length>1) {
-      const cosParallel=Math.cos(4*Math.PI/180);
-      const families=[];
-      // Grandes primero: las caras extensas actúan como ancla para las pequeñas.
-      const order=regions.map((_,i)=>i).sort((a,b)=>regions[b].area-regions[a].area);
-      for(const ri of order) {
-        const r=regions[ri];
-        let best=-1,bestDot=cosParallel;
-        for(let fi=0;fi<families.length;fi++) {
-          const f=families[fi];
-          const dot=Math.abs(r.normal[0]*f.n[0]+r.normal[1]*f.n[1]+r.normal[2]*f.n[2]);
-          if(dot>bestDot){bestDot=dot;best=fi;}
-        }
-        if(best<0) {
-          families.push({n:r.normal.slice(),members:[ri],weight:r.area});
-        } else {
-          const f=families[best];
-          const sign=(r.normal[0]*f.n[0]+r.normal[1]*f.n[1]+r.normal[2]*f.n[2])>=0?1:-1;
-          const w=r.area;
-          let x=f.n[0]*f.weight+r.normal[0]*sign*w;
-          let y=f.n[1]*f.weight+r.normal[1]*sign*w;
-          let z=f.n[2]*f.weight+r.normal[2]*sign*w;
-          const l=Math.hypot(x,y,z)||1;
-          f.n=[x/l,y/l,z/l]; f.weight+=w; f.members.push(ri);
-        }
-      }
-      parallelFamilies=families.filter(f=>f.members.length>1).length;
-      for(const f of families) {
-        if(f.members.length<2) continue;
-        for(const ri of f.members) {
-          const r=regions[ri];
-          const sign=(r.normal[0]*f.n[0]+r.normal[1]*f.n[1]+r.normal[2]*f.n[2])>=0?1:-1;
-          r.normal=[f.n[0]*sign,f.n[1]*sign,f.n[2]*sign];
-          r.d=r.center[0]*r.normal[0]+r.center[1]*r.normal[1]+r.center[2]*r.normal[2];
-        }
-      }
-    }
-
-    const output=new Float32Array(positions);
-    const bestRegionSize=new Uint32Array(vertexCount);
-    const minInterior=0.34+edgeProtection*.58;
-    let verticesMoved=0;
-
-    for(const r of regions) {
-      const [nx,ny,nz]=r.normal;
-      for(let i=0;i<r.verts.length;i++) {
-        const v=r.verts[i];
-        if(bestRegionSize[v]>=r.faces) continue;
-        const ratio=r.membership[i]/255;
-        if(ratio<minInterior) continue;
-        // En el borde la corrección entra progresivamente; en el interior llega a la fuerza solicitada.
-        const edgeWeight=Math.min(1,(ratio-minInterior)/Math.max(1e-6,1-minInterior));
-        const w=strength*(0.25+0.75*edgeWeight);
-        const vi=v*3;
-        const dist=positions[vi]*nx+positions[vi+1]*ny+positions[vi+2]*nz-r.d;
-        output[vi]=positions[vi]-nx*dist*w;
-        output[vi+1]=positions[vi+1]-ny*dist*w;
-        output[vi+2]=positions[vi+2]-nz*dist*w;
-        if(bestRegionSize[v]===0 && Math.abs(dist*w)>1e-8) verticesMoved++;
-        bestRegionSize[v]=r.faces;
-      }
-    }
-
-    self.postMessage({
-      type:'done',positions:output,regions:regions.length,rejectedRegions,parallelFamilies,
-      verticesMoved,elapsedMs:performance.now()-started
-    },[output.buffer]);
-  } catch (err) {
-    self.postMessage({type:'error',message:err?.message || String(err)});
+  const normals=new Float32Array(faceCount*3),areas=new Float32Array(faceCount),centroids=new Float32Array(faceCount*3);
+  let totalArea=0;
+  for(let f=0;f<faceCount;f++){
+   const a=indices[f*3]*3,b=indices[f*3+1]*3,c=indices[f*3+2]*3;
+   const ax=positions[a],ay=positions[a+1],az=positions[a+2],abx=positions[b]-ax,aby=positions[b+1]-ay,abz=positions[b+2]-az,acx=positions[c]-ax,acy=positions[c+1]-ay,acz=positions[c+2]-az;
+   let nx=aby*acz-abz*acy,ny=abz*acx-abx*acz,nz=abx*acy-aby*acx;const len=Math.hypot(nx,ny,nz)||1;const area=len*.5;areas[f]=area;totalArea+=area;nx/=len;ny/=len;nz/=len;normals[f*3]=nx;normals[f*3+1]=ny;normals[f*3+2]=nz;centroids[f*3]=(positions[a]+positions[b]+positions[c])/3;centroids[f*3+1]=(positions[a+1]+positions[b+1]+positions[c+1])/3;centroids[f*3+2]=(positions[a+2]+positions[b+2]+positions[c+2])/3;
   }
+  const typicalEdge=Math.sqrt(Math.max(totalArea/faceCount,1e-16)*2);
+
+  postMessage({type:'progress',stage:'Construyendo adyacencia'});
+  const neighbors=new Int32Array(faceCount*3);neighbors.fill(-1);const neighborCount=new Uint8Array(faceCount),edgeOwner=new Map();
+  const edgeKey=(a,b)=>{if(a>b){const t=a;a=b;b=t}return a*vertexCount+b};
+  for(let f=0;f<faceCount;f++){
+   const a=indices[f*3],b=indices[f*3+1],c=indices[f*3+2],es=[[a,b],[b,c],[c,a]];
+   for(const e of es){const k=edgeKey(e[0],e[1]),other=edgeOwner.get(k);if(other===undefined)edgeOwner.set(k,f);else if(other>=0){const ca=neighborCount[f],cb=neighborCount[other];if(ca<3&&cb<3){neighbors[f*3+ca]=other;neighborCount[f]=ca+1;neighbors[other*3+cb]=f;neighborCount[other]=cb+1}edgeOwner.set(k,-1)}}
+  }
+  edgeOwner.clear();
+
+  postMessage({type:'progress',stage:'Detectando planos estructurales'});
+  const visited=new Uint8Array(faceCount),faceRegion=new Int32Array(faceCount);faceRegion.fill(-1);const queue=new Int32Array(faceCount),regions=[];let rejectedRegions=0;
+  const cosLimit=Math.cos(rad(angleDeg));
+  const maxRmsFactor=.22+(1-planeConfidence)*1.05;
+
+  for(let seed=0;seed<faceCount;seed++){
+   if(visited[seed])continue;visited[seed]=1;let head=0,tail=1;queue[0]=seed;
+   const sn=[normals[seed*3],normals[seed*3+1],normals[seed*3+2]],sc=[centroids[seed*3],centroids[seed*3+1],centroids[seed*3+2]],seedD=dot(sn,sc);
+   while(head<tail){const f=queue[head++];for(let k=0;k<neighborCount[f];k++){const nb=neighbors[f*3+k];if(nb<0||visited[nb])continue;const nn=[normals[nb*3],normals[nb*3+1],normals[nb*3+2]];if(dot(nn,sn)<cosLimit)continue;const cc=[centroids[nb*3],centroids[nb*3+1],centroids[nb*3+2]];if(Math.abs(dot(sn,cc)-seedD)>typicalEdge*(1.2+(1-planeConfidence)*3.5))continue;visited[nb]=1;queue[tail++]=nb}}
+   if(tail<minRegionFaces){rejectedRegions++;continue}
+   let sx=0,sy=0,sz=0,cx=0,cy=0,cz=0,aw=0;
+   for(let q=0;q<tail;q++){const f=queue[q],w=areas[f]||1;sx+=normals[f*3]*w;sy+=normals[f*3+1]*w;sz+=normals[f*3+2]*w;cx+=centroids[f*3]*w;cy+=centroids[f*3+1]*w;cz+=centroids[f*3+2]*w;aw+=w}
+   let n=norm([sx,sy,sz]);const center=[cx/aw,cy/aw,cz/aw],d=dot(n,center);
+   let sq=0,samples=0;const stride=Math.max(1,Math.floor(tail/3000));
+   for(let q=0;q<tail;q+=stride){const f=queue[q];for(let j=0;j<3;j++){const vi=indices[f*3+j]*3,dist=positions[vi]*n[0]+positions[vi+1]*n[1]+positions[vi+2]*n[2]-d;sq+=dist*dist;samples++}}
+   const rms=Math.sqrt(sq/Math.max(samples,1));if(rms>typicalEdge*maxRmsFactor){rejectedRegions++;continue}
+   const id=regions.length;const faces=new Int32Array(tail);for(let q=0;q<tail;q++){faces[q]=queue[q];faceRegion[queue[q]]=id}regions.push({id,n,d,area:aw,rms,faces});
+  }
+
+  postMessage({type:'progress',stage:'Buscando familias paralelas y escuadras'});
+  const families=[];const famCos=Math.cos(rad(Math.max(5,Math.min(12,angleDeg+2))));
+  const order=regions.map((r,i)=>i).sort((a,b)=>regions[b].area-regions[a].area);
+  for(const ri of order){const r=regions[ri];let best=-1,bestDot=0;for(let i=0;i<families.length;i++){const ad=absDot(r.n,families[i].n);if(ad>famCos&&ad>bestDot){best=i;bestDot=ad}}if(best<0)families.push({n:r.n.slice(),area:r.area,members:[ri]});else{const fam=families[best],sgn=dot(r.n,fam.n)>=0?1:-1,w=fam.area+r.area;fam.n=norm([(fam.n[0]*fam.area+r.n[0]*r.area*sgn)/w,(fam.n[1]*fam.area+r.n[1]*r.area*sgn)/w,(fam.n[2]*fam.area+r.n[2]*r.area*sgn)/w]);fam.area=w;fam.members.push(ri)}}
+
+  if(orthogonalSnap&&families.length>=2){
+   families.sort((a,b)=>b.area-a.area);const a=norm(families[0].n);let bi=-1,bscore=999;for(let i=1;i<families.length;i++){const s=Math.abs(dot(a,families[i].n));if(s<bscore){bscore=s;bi=i}}if(bi>=0&&bscore<Math.sin(rad(18))){let b=families[bi].n.slice();const proj=dot(b,a);b=norm([b[0]-a[0]*proj,b[1]-a[1]*proj,b[2]-a[2]*proj]);const c=norm(cross(a,b));const axes=[a,b,c];for(const fam of families){let bestAxis=null,best=0,sign=1;for(const ax of axes){const dd=dot(fam.n,ax),ad=Math.abs(dd);if(ad>best){best=ad;bestAxis=ax;sign=dd>=0?1:-1}}if(best>Math.cos(rad(18)))fam.n=[bestAxis[0]*sign,bestAxis[1]*sign,bestAxis[2]*sign]}}
+  }
+  if(alignParallel){for(const fam of families)for(const ri of fam.members){const r=regions[ri],sgn=dot(r.n,fam.n)>=0?1:-1;r.n=[fam.n[0]*sgn,fam.n[1]*sgn,fam.n[2]*sgn];let sum=0,w=0;for(const f of r.faces){const a=areas[f]||1;sum+=dot(r.n,[centroids[f*3],centroids[f*3+1],centroids[f*3+2]])*a;w+=a}r.d=sum/Math.max(w,1)}}
+
+  postMessage({type:'progress',stage:'Reconstruyendo caras y aristas rectas'});
+  const incident=Array.from({length:vertexCount},()=>[]);
+  for(let f=0;f<faceCount;f++){const rid=faceRegion[f];if(rid<0)continue;for(let j=0;j<3;j++){const v=indices[f*3+j],arr=incident[v];if(arr[arr.length-1]!==rid&&!arr.includes(rid))arr.push(rid)}}
+  const output=new Float32Array(positions);let verticesMoved=0,orthogonalEdges=0;
+  const projectPlane=(p,r)=>{const e=dot(r.n,p)-r.d;return[p[0]-r.n[0]*e,p[1]-r.n[1]*e,p[2]-r.n[2]*e]};
+  const projectTwo=(p,r1,r2)=>{const a=dot(r1.n,r1.n),b=dot(r1.n,r2.n),c=dot(r2.n,r2.n),det=a*c-b*b;if(Math.abs(det)<1e-8)return projectPlane(p,r1);const e1=dot(r1.n,p)-r1.d,e2=dot(r2.n,p)-r2.d,l1=(c*e1-b*e2)/det,l2=(-b*e1+a*e2)/det;return[p[0]-r1.n[0]*l1-r2.n[0]*l2,p[1]-r1.n[1]*l1-r2.n[1]*l2,p[2]-r1.n[2]*l1-r2.n[2]*l2]};
+  for(let v=0;v<vertexCount;v++){
+   const rs=incident[v];if(!rs.length)continue;const vi=v*3,p=[positions[vi],positions[vi+1],positions[vi+2]];let target=p;
+   if(rs.length===1)target=projectPlane(p,regions[rs[0]]);
+   else{
+    const ranked=rs.slice().sort((a,b)=>regions[b].area-regions[a].area),r1=regions[ranked[0]],r2=regions[ranked[1]],ang=Math.acos(clamp(absDot(r1.n,r2.n),-1,1))*180/Math.PI;
+    if(sharpIntersections&&ang>72&&ang<108){target=projectTwo(p,r1,r2);orthogonalEdges++}else{const p1=projectPlane(p,r1),p2=projectPlane(p,r2);target=[(p1[0]+p2[0])/2,(p1[1]+p2[1])/2,(p1[2]+p2[2])/2]}
+    if(rs.length>2){const preserve=edgeProtection;target=[p[0]+(target[0]-p[0])*(1-preserve),p[1]+(target[1]-p[1])*(1-preserve),p[2]+(target[2]-p[2])*(1-preserve)]}
+   }
+   const blend=strength;const nx=p[0]+(target[0]-p[0])*blend,ny=p[1]+(target[1]-p[1])*blend,nz=p[2]+(target[2]-p[2])*blend;if(Math.hypot(nx-p[0],ny-p[1],nz-p[2])>1e-8)verticesMoved++;output[vi]=nx;output[vi+1]=ny;output[vi+2]=nz;
+  }
+  orthogonalEdges=Math.round(orthogonalEdges/2);
+
+  let thicknesses=[];
+  if(detectThickness&&regions.length>1){
+   postMessage({type:'progress',stage:'Estimando espesores nominales'});const vals=[];const maxPairs=12000;let pairs=0;
+   for(let i=0;i<regions.length&&pairs<maxPairs;i++)for(let j=i+1;j<regions.length&&pairs<maxPairs;j++){const a=regions[i],b=regions[j];if(absDot(a.n,b.n)<Math.cos(rad(6)))continue;let bn=b.n,bd=b.d;if(dot(a.n,b.n)<0){bn=[-bn[0],-bn[1],-bn[2]];bd=-bd}const dist=Math.abs(a.d-bd);if(dist>typicalEdge*.4){vals.push(dist);pairs++}}
+   if(vals.length){vals.sort((a,b)=>a-b);const bucket=Math.max(typicalEdge*.35,1e-6),groups=[];for(const v of vals){const g=groups.find(x=>Math.abs(x.mean-v)<bucket);if(g){g.sum+=v;g.count++;g.mean=g.sum/g.count}else groups.push({sum:v,count:1,mean:v})}groups.sort((a,b)=>b.count-a.count);thicknesses=groups.slice(0,3).filter(g=>g.count>=2).map(g=>formatLength(g.mean))}
+  }
+
+  postMessage({type:'done',positions:output,regions:regions.length,rejectedRegions,parallelFamilies:families.length,orthogonalEdges,verticesMoved,thicknesses,elapsedMs:performance.now()-started},[output.buffer]);
+ }catch(err){postMessage({type:'error',message:err?.message||String(err)})}
 };
+
+function formatLength(v){if(!isFinite(v))return'?';if(v>=100)return v.toFixed(1);if(v>=10)return v.toFixed(2);if(v>=1)return v.toFixed(3);return v.toPrecision(3)}
