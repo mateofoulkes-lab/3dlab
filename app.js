@@ -7,6 +7,7 @@ import { STLExporter } from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples
 import { OBJExporter } from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/exporters/OBJExporter.js';
 import { mergeGeometries, mergeVertices } from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/utils/BufferGeometryUtils.js';
 
+const APP_VERSION = '2.1';
 const $ = (id) => document.getElementById(id);
 const viewer = $('viewer');
 const fileInput = $('fileInput');
@@ -37,12 +38,16 @@ const meshStats = $('meshStats');
 const resultCard = $('resultCard');
 const resultText = $('resultText');
 const installBtn = $('installBtn');
+const versionBadge = $('versionBadge');
+
+if (versionBadge) versionBadge.textContent = `v${APP_VERSION}`;
 
 let scene, camera, renderer, controls, mesh;
 let originalGeometry = null;
 let cleanedGeometry = null;
 let activeName = 'modelo';
 let deferredInstallPrompt = null;
+let reloadingForUpdate = false;
 
 init3D();
 registerPWA();
@@ -93,8 +98,32 @@ function init3D() {
 
 function registerPWA() {
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(console.warn));
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloadingForUpdate) return;
+      reloadingForUpdate = true;
+      location.reload();
+    });
+
+    window.addEventListener('load', async () => {
+      try {
+        const registration = await navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' });
+        await registration.update();
+        if (registration.waiting) registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+        registration.addEventListener('updatefound', () => {
+          const worker = registration.installing;
+          if (!worker) return;
+          worker.addEventListener('statechange', () => {
+            if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+              worker.postMessage({ type: 'SKIP_WAITING' });
+            }
+          });
+        });
+      } catch (err) {
+        console.warn('No se pudo actualizar la PWA:', err);
+      }
+    });
   }
+
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredInstallPrompt = e;
