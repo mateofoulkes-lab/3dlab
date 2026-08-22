@@ -1,29 +1,34 @@
-# 3DLab
+# 3DLab — Mesh to CAD
 
-MVP web/PWA para limpiar meshes 3D escaneados directamente en el dispositivo, sin subir archivos a un servidor.
+PWA experimental para reconstruir scans 3D de piezas manufacturadas como geometría CAD-like directamente en el dispositivo, sin subir el modelo a ningún servidor.
 
-## MVP actual
+## v3.0
 
-- Carga local de STL y OBJ.
+- Carga local de GLB, GLTF, STL y OBJ.
 - Visor 3D táctil con Three.js.
-- Detección de regiones aproximadamente planas por conectividad y normales.
-- Proyección gradual hacia planos ideales con control **Fuerza CAD**.
-- Tolerancia angular y tamaño mínimo de región configurables.
-- Comparación Original / Corregido.
+- Detección de planos estructurales por conectividad, normales y error geométrico.
+- Familias de caras paralelas.
+- Snap ortogonal de familias cercanas a 90°.
+- Reconstrucción de bordes como intersecciones rectas entre planos.
+- Protección de zonas ambiguas para no forzar detalles no comprendidos.
+- Detección experimental de separaciones repetidas entre planos paralelos como candidatos a espesores nominales.
+- Comparación Scan / Reconstruido.
 - Exportación local a STL u OBJ.
-- Procesamiento en Web Worker para no bloquear la interfaz.
-- PWA instalable y cache offline después de la primera carga completa.
+- Procesamiento en Web Worker.
+- PWA instalable, offline y con actualización automática al refrescar cuando hay una versión nueva.
 
-## Publicar con GitHub Pages
+## Filosofía
 
-En el repositorio: **Settings → Pages → Deploy from a branch → main / root**.
+El objetivo ya no es suavizar un mesh. Es inferir la intención de diseño de una pieza física escaneada: reemplazar ruido por planos, paralelismos, perpendicularidades, aristas rectas y, progresivamente, radios/fillets, cilindros, agujeros, simetrías y espesores consistentes.
 
-La URL esperada es:
+## Próxima etapa
+
+El siguiente gran paso es usar las caras reconstruidas como esqueleto geométrico para detectar las bandas curvas existentes entre planos y convertirlas en fillets de radio constante. Después: cilindros/agujeros y salida CAD paramétrica.
+
+## GitHub Pages / Android
+
+Publicar desde **Settings → Pages → Deploy from a branch → main / root**.
 
 `https://mateofoulkes-lab.github.io/3dlab/`
 
-En Android, abrir esa URL con Chrome y usar **Instalar app / Añadir a pantalla principal**. Los modelos elegidos desde el selector de archivos permanecen en el dispositivo.
-
-## Alcance de esta primera prueba
-
-Esta versión prueba la hipótesis principal: corregir el aspecto bumpy de piezas manufacturadas detectando caras que deberían ser planas. El siguiente paso previsto es agregar restricciones CAD entre superficies: paralelismo, perpendicularidad, espesores repetidos, líneas largas rectas y cilindros.
+En Android se puede instalar como PWA desde Chrome. Los modelos seleccionados permanecen en el dispositivo.
