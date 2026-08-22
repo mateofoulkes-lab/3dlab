@@ -1,0 +1,14 @@
+{
+  "name": "3DLab — Scan to CAD Cleanup",
+  "short_name": "3DLab",
+  "description": "Limpieza local de meshes 3D escaneados con detección de superficies planas.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b0d10",
+  "theme_color": "#111318",
+  "orientation": "any",
+  "icons": [
+    {"src":"./icons/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}
+  ]
+}
