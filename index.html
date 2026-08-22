@@ -1,79 +1,14 @@
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <meta name="theme-color" content="#0c1016" />
-  <meta name="description" content="3DLab Mesh to CAD: reconstrucción geométrica local de meshes escaneados." />
-  <link rel="manifest" href="./manifest.webmanifest" />
-  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="./styles.css?v=4.0" />
-  <title>3DLab · Mesh to CAD</title>
-  <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"}}</script>
-</head>
-<body>
-<header class="topbar">
-  <div><div class="brand">3DLab <span class="brand-mode">Mesh → CAD</span></div><div class="subtitle">Reverse engineering geométrico · local en tu dispositivo</div></div>
-  <div class="topbar-right"><div id="versionBadge" class="version-badge">v4.0</div><button id="installBtn" class="ghost compact hidden">Instalar</button></div>
-</header>
-<main>
-  <section id="viewerWrap" class="viewer-wrap">
-    <div id="viewer"></div>
-    <div id="dropHint" class="drop-hint"><div class="drop-icon">⬡</div><strong>Reconstruí un scan como geometría manufacturada</strong><span>GLB, GLTF, STL u OBJ · sin uploads · el modelo nunca sale del dispositivo.</span><button id="openBtn" class="primary">Elegir modelo</button></div>
-    <input id="fileInput" type="file" accept=".glb,.gltf,.stl,.obj,model/gltf-binary,model/gltf+json,model/stl,text/plain" hidden />
-    <div id="viewerHud" class="viewer-hud hidden"><button id="fitBtn" class="round" title="Encuadrar">⌖</button><button id="wireBtn" class="round" title="Wireframe">#</button></div>
-    <div id="busy" class="busy hidden"><div class="spinner"></div><strong>Reconstruyendo…</strong><span id="busyStage">Analizando topología</span></div>
-  </section>
-
-  <section class="panel">
-    <div class="file-row"><div class="file-copy"><div id="fileName" class="file-name">Sin modelo</div><div id="meshStats" class="mesh-stats">—</div></div><button id="changeBtn" class="ghost" disabled>Cambiar</button></div>
-
-    <div class="engine-tabs engine-tabs-3">
-      <button id="rebuildEngineTab" class="active">Rebuild <span>v4</span></button>
-      <button id="cadEngineTab">Deform <span>v3</span></button>
-      <button id="legacyEngineTab">Planar <span>v2</span></button>
-    </div>
-    <div class="segmented"><button id="originalView" class="active" disabled>Scan</button><button id="cleanView" disabled>Resultado</button></div>
-
-    <div id="rebuildControls">
-      <div class="mission-card rebuild-card"><strong>Rebuild: tirar el mesh y volver a construir</strong><span>El scan se usa únicamente como instrumento de medición. El resultado se genera con parches planos nuevos y contornos vectorizados; no reutiliza los triángulos originales.</span></div>
-      <div class="section-label">Suposición industrial 2.5D</div>
-      <label class="toggle-row emphasized"><span><strong>Permitir planos inclinados</strong><small>Destildado por defecto: solo acepta tapas y paredes ortogonales respecto del eje principal inferido.</small></span><input id="rebuildTilted" type="checkbox" disabled /></label>
-      <div class="control"><div class="control-head"><label for="rebuildAngle">Tolerancia de plano</label><output id="rebuildAngleValue">7°</output></div><input id="rebuildAngle" type="range" min="3" max="16" value="7" disabled /><small>Más bajo separa mejor planos de radios y deformaciones.</small></div>
-      <div class="control"><div class="control-head"><label for="rebuildConfidence">Exigencia geométrica</label><output id="rebuildConfidenceValue">86%</output></div><input id="rebuildConfidence" type="range" min="45" max="98" value="86" disabled /><small>Descarta superficies que no se parecen lo suficiente a un plano real.</small></div>
-      <div class="control"><div class="control-head"><label for="rebuildMinRegion">Plano mínimo</label><output id="rebuildMinRegionValue">130 caras</output></div><input id="rebuildMinRegion" type="range" min="30" max="700" step="10" value="130" disabled /></div>
-      <div class="control"><div class="control-head"><label for="rebuildSimplify">Vectorización</label><output id="rebuildSimplifyValue">45%</output></div><input id="rebuildSimplify" type="range" min="0" max="100" value="45" disabled /><small>Más alto convierte bordes ondulados en menos segmentos rectos. Los radios vendrán después como una operación separada.</small></div>
-      <div class="mission-card"><strong>Qué hace v4</strong><span>Detecta planos → infiere un marco ortogonal → extrae sus contornos → simplifica esos contornos → triangula superficies nuevas. La topología del scan no pasa al resultado.</span></div>
-    </div>
-
-    <div id="cadControls" class="hidden">
-      <div class="mission-card"><strong>Motor v3 · Deform</strong><span>Conserva la topología original y desplaza sus vértices hacia planos/intersecciones. Se mantiene para comparar.</span></div>
-      <div class="control"><div class="control-head"><label for="strength">Fuerza de reconstrucción</label><output id="strengthValue">100%</output></div><input id="strength" type="range" min="20" max="100" value="100" disabled /></div>
-      <div class="control"><div class="control-head"><label for="angle">Tolerancia de plano</label><output id="angleValue">8°</output></div><input id="angle" type="range" min="3" max="20" value="8" disabled /></div>
-      <div class="control"><div class="control-head"><label for="confidence">Exigencia geométrica</label><output id="confidenceValue">82%</output></div><input id="confidence" type="range" min="35" max="98" value="82" disabled /></div>
-      <div class="control"><div class="control-head"><label for="minRegion">Plano mínimo</label><output id="regionValue">160 caras</output></div><input id="minRegion" type="range" min="30" max="700" step="10" value="160" disabled /></div>
-      <label class="toggle-row emphasized"><span><strong>Permitir planos inclinados</strong><small>Destildado fuerza la lectura 2.5D.</small></span><input id="allowTiltedPlanes" type="checkbox" disabled /></label>
-      <label class="toggle-row"><span><strong>Familias paralelas</strong></span><input id="alignParallel" type="checkbox" checked disabled /></label>
-      <label class="toggle-row"><span><strong>Snap ortogonal 90°</strong></span><input id="orthogonalSnap" type="checkbox" checked disabled /></label>
-      <label class="toggle-row"><span><strong>Aristas por intersección</strong></span><input id="sharpIntersections" type="checkbox" checked disabled /></label>
-      <label class="toggle-row"><span><strong>Analizar espesores</strong></span><input id="detectThickness" type="checkbox" checked disabled /></label>
-      <div class="control"><div class="control-head"><label for="edgeProtect">Preservar zonas ambiguas</label><output id="edgeValue">55%</output></div><input id="edgeProtect" type="range" min="0" max="100" value="55" disabled /></div>
-    </div>
-
-    <div id="legacyControls" class="hidden">
-      <div class="mission-card legacy-card"><strong>Motor v2 · Planar Cleanup</strong><span>Detecta regiones aproximadamente planas y proyecta los vértices del scan hacia ellas.</span></div>
-      <div class="control"><div class="control-head"><label for="legacyStrength">Fuerza CAD</label><output id="legacyStrengthValue">65%</output></div><input id="legacyStrength" type="range" min="0" max="100" value="65" disabled /></div>
-      <div class="control"><div class="control-head"><label for="legacyAngle">Tolerancia de plano</label><output id="legacyAngleValue">12°</output></div><input id="legacyAngle" type="range" min="4" max="28" value="12" disabled /></div>
-      <div class="control"><div class="control-head"><label for="legacyMinRegion">Tamaño mínimo</label><output id="legacyRegionValue">60 caras</output></div><input id="legacyMinRegion" type="range" min="12" max="300" step="4" value="60" disabled /></div>
-    </div>
-
-    <div class="actions"><button id="analyzeBtn" class="primary wide" disabled>Rebuild CAD</button><button id="resetBtn" class="ghost wide" disabled>Restaurar scan</button></div>
-    <div id="resultCard" class="result-card hidden"><strong id="resultTitle">Procesamiento terminado</strong><span id="resultText"></span><div id="cadFacts" class="cad-facts"></div></div>
-    <div class="export-row"><button id="exportStlBtn" class="ghost" disabled>Guardar STL</button><button id="exportObjBtn" class="ghost" disabled>Guardar OBJ</button></div>
-    <p class="roadmap-note">v4 ya reconstruye superficies nuevas. Próximo objetivo: reconocer radios/fillets, cilindros y espesores para generar sólidos CAD cerrados y luego exportar STEP/BREP.</p>
-  </section>
-</main>
-<footer>3DLab Mesh → CAD · procesamiento 100% local</footer>
-<script type="module" src="./app.js?v=4.0"></script>
-</body>
-</html>
+<!doctype html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0c1016"><meta name="description" content="3DLab Mesh to CAD asistido"><link rel="manifest" href="./manifest.webmanifest"><link rel="icon" href="./icons/icon.svg" type="image/svg+xml"><link rel="stylesheet" href="./styles.css?v=5.0"><title>3DLab · Assisted Mesh to CAD</title><script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"}}</script></head><body>
+<header class="topbar"><div><div class="brand">3DLab <span>Mesh → CAD</span></div><div class="subtitle">Reconstrucción asistida · local en tu dispositivo</div></div><div id="versionBadge" class="version">v5.0</div></header>
+<main><section class="viewer-wrap"><div id="viewer"></div><div id="dropHint" class="drop-hint"><strong>Elegí el scan</strong><span>GLB, GLTF, STL u OBJ. El archivo no sale del dispositivo.</span><button id="openBtn" class="primary">Elegir modelo</button></div><input id="fileInput" type="file" accept=".glb,.gltf,.stl,.obj,model/gltf-binary,model/gltf+json,model/stl,text/plain" hidden><div id="hud" class="hud hidden"><button id="fitBtn">⌖</button><button id="wireBtn">#</button></div><div id="busy" class="busy hidden"><div class="spinner"></div><strong id="busyStage">Procesando…</strong></div></section>
+<section class="panel"><div class="file-row"><div><div id="fileName" class="file-name">Sin modelo</div><div id="meshStats" class="muted">—</div></div><button id="changeBtn" class="ghost" disabled>Cambiar</button></div>
+<div class="wizard-tabs" id="wizardTabs"><button data-step="0" class="active">1 Orientar</button><button data-step="1">2 Planos Z</button><button data-step="2">3 Planos X</button><button data-step="3">4 Planos Y</button><button data-step="4">5 Features</button><button data-step="5">6 CAD base</button><button data-step="6">7 Radios</button></div>
+<div class="view-tabs"><button id="scanView" class="active" disabled>Scan</button><button id="cadView" disabled>CAD</button><button id="overlayView" disabled>Superponer</button></div>
+<section id="step0" class="step active"><div class="mission"><strong>Orientar pieza</strong><span>Primero definimos el sistema XYZ. Tocá 2–3 triángulos de una cara horizontal y guardá Z. Luego tocá una pared y guardá X. Y se calcula automáticamente.</span></div><div class="selection-card"><span id="selectionCount">0 caras seleccionadas</span><button id="clearSelection" class="ghost">Limpiar</button></div><div class="actions"><button id="defineZ" class="primary" disabled>Definir eje Z</button><button id="defineX" class="primary" disabled>Definir eje X</button></div><div id="axisStatus" class="facts"></div></section>
+<section id="step1" class="step"><div class="mission"><strong>Planos Z</strong><span>Creá una capa por cada altura relevante: fondo, tapas, escalones. Seleccioná 1–3 caras de esa superficie y guardala.</span></div><button id="addZPlane" class="primary wide">Guardar plano Z desde selección</button><div id="zPlanes" class="plane-list"></div></section>
+<section id="step2" class="step"><div class="mission"><strong>Planos X</strong><span>Marcá las paredes que siguen la dirección X local. Cada plano guardado se expande desde las caras elegidas y obtiene un contorno limpio.</span></div><button id="addXPlane" class="primary wide">Guardar plano X desde selección</button><div id="xPlanes" class="plane-list"></div></section>
+<section id="step3" class="step"><div class="mission"><strong>Planos Y</strong><span>Repetí con la otra familia de paredes.</span></div><button id="addYPlane" class="primary wide">Guardar plano Y desde selección</button><div id="yPlanes" class="plane-list"></div></section>
+<section id="step4" class="step"><div class="mission"><strong>Features 2D</strong><span>Seleccioná un plano guardado y agregá líneas, círculos o arcos como ayudas de reconstrucción. Línea: 2 toques. Círculo/arco: 3 toques.</span></div><select id="featurePlane"></select><div class="feature-buttons"><button data-feature="line" class="active">Línea</button><button data-feature="circle">Círculo</button><button data-feature="arc">Arco</button></div><div id="featureStatus" class="muted">0 puntos</div><button id="saveFeature" class="primary wide">Guardar feature</button><div id="featureList" class="plane-list"></div></section>
+<section id="step5" class="step"><div class="mission"><strong>Construir CAD base</strong><span>Genera superficies nuevas usando únicamente los planos y contornos que definiste. El mesh original queda solo como referencia.</span></div><button id="buildCad" class="primary wide">Construir CAD simple</button><div id="cadSummary" class="facts"></div></section>
+<section id="step6" class="step"><div class="mission"><strong>Calcular radios</strong><span>Superpone el CAD duro con el scan para detectar dónde una esquina de 90° en realidad era un fillet. Esta etapa queda preparada para la siguiente iteración.</span></div><button id="estimateRadii" class="primary wide" disabled>Calcular radios (próximamente)</button><div class="muted note">Primero necesitamos que el CAD base quede estable; después mediremos el scan alrededor de cada intersección ortogonal y sugeriremos radios nominales.</div></section>
+<div class="bottom-nav"><button id="prevStep" class="ghost">← Anterior</button><button id="nextStep" class="primary">Siguiente →</button></div></section></main><footer>3DLab v5 · menos magia, más control</footer><script type="module" src="./app.js?v=5.0"></script></body></html>
