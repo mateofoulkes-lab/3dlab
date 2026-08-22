@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#111318" />
+  <meta name="description" content="3DLab: limpieza local de meshes 3D escaneados con enfoque hard-surface." />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="./styles.css" />
+  <title>3DLab</title>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="brand">3DLab</div>
+      <div class="subtitle">Scan → CAD cleanup</div>
+    </div>
+    <button id="installBtn" class="ghost hidden">Instalar</button>
+  </header>
+
+  <main>
+    <section id="viewerWrap" class="viewer-wrap">
+      <div id="viewer"></div>
+      <div id="dropHint" class="drop-hint">
+        <div class="drop-icon">⬡</div>
+        <strong>Abrí un STL u OBJ</strong>
+        <span>El archivo se procesa localmente en este dispositivo.</span>
+        <button id="openBtn" class="primary">Elegir modelo</button>
+      </div>
+      <input id="fileInput" type="file" accept=".stl,.obj,model/stl,text/plain" hidden />
+
+      <div id="viewerHud" class="viewer-hud hidden">
+        <button id="fitBtn" class="round" title="Encuadrar">⌖</button>
+        <button id="wireBtn" class="round" title="Wireframe">#</button>
+      </div>
+      <div id="busy" class="busy hidden"><div class="spinner"></div><span>Procesando…</span></div>
+    </section>
+
+    <section class="panel">
+      <div class="file-row">
+        <div>
+          <div id="fileName" class="file-name">Sin modelo</div>
+          <div id="meshStats" class="mesh-stats">—</div>
+        </div>
+        <button id="changeBtn" class="ghost" disabled>Cambiar</button>
+      </div>
+
+      <div class="segmented">
+        <button id="originalView" class="active" disabled>Original</button>
+        <button id="cleanView" disabled>Corregido</button>
+      </div>
+
+      <div class="control">
+        <div class="control-head"><label for="strength">Fuerza CAD</label><output id="strengthValue">65%</output></div>
+        <input id="strength" type="range" min="0" max="100" value="65" disabled />
+        <small>Cuánto se acercan las zonas planas detectadas a su plano ideal.</small>
+      </div>
+
+      <div class="control">
+        <div class="control-head"><label for="angle">Tolerancia de plano</label><output id="angleValue">12°</output></div>
+        <input id="angle" type="range" min="4" max="28" value="12" disabled />
+        <small>Más alto = acepta superficies más onduladas como un mismo plano.</small>
+      </div>
+
+      <div class="control">
+        <div class="control-head"><label for="minRegion">Tamaño mínimo</label><output id="regionValue">60 caras</output></div>
+        <input id="minRegion" type="range" min="12" max="300" step="4" value="60" disabled />
+        <small>Evita convertir pequeños detalles del scan en superficies planas.</small>
+      </div>
+
+      <div class="actions">
+        <button id="analyzeBtn" class="primary wide" disabled>Analizar y corregir</button>
+        <button id="resetBtn" class="ghost wide" disabled>Restaurar</button>
+      </div>
+
+      <div id="resultCard" class="result-card hidden">
+        <strong id="resultTitle">Análisis terminado</strong>
+        <span id="resultText"></span>
+      </div>
+
+      <div class="export-row">
+        <button id="exportStlBtn" class="ghost" disabled>Guardar STL</button>
+        <button id="exportObjBtn" class="ghost" disabled>Guardar OBJ</button>
+      </div>
+    </section>
+  </main>
+
+  <footer>Sin uploads · sin servidor · procesamiento local</footer>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
