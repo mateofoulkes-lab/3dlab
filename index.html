@@ -18,7 +18,7 @@
       <div class="subtitle">Reverse engineering geométrico · local en tu dispositivo</div>
     </div>
     <div class="topbar-right">
-      <div id="versionBadge" class="version-badge">v3.0</div>
+      <div id="versionBadge" class="version-badge">v3.1</div>
       <button id="installBtn" class="ghost compact hidden">Instalar</button>
     </div>
   </header>
@@ -54,68 +54,63 @@
         <button id="changeBtn" class="ghost" disabled>Cambiar</button>
       </div>
 
+      <div class="engine-tabs">
+        <button id="cadEngineTab" class="active">Mesh → CAD <span>v3</span></button>
+        <button id="legacyEngineTab">Planar Cleanup <span>v2</span></button>
+      </div>
+
       <div class="segmented">
         <button id="originalView" class="active" disabled>Scan</button>
-        <button id="cleanView" disabled>Reconstruido</button>
+        <button id="cleanView" disabled>Procesado</button>
       </div>
 
-      <div class="mission-card">
-        <strong>Objetivo del motor</strong>
-        <span>Reemplazar ruido de escaneo por planos, paralelismos, esquinas rectas y geometría manufacturada consistente.</span>
+      <div id="cadControls">
+        <div class="mission-card">
+          <strong>Modo 2.5D industrial</strong>
+          <span>Por defecto asume una pieza tipo vector extruido: tapas horizontales, paredes verticales y radios entre planos. Los planos inclinados se consideran ruido salvo que los habilites.</span>
+        </div>
+
+        <div class="section-label">Geometría base</div>
+        <div class="control">
+          <div class="control-head"><label for="strength">Fuerza de reconstrucción</label><output id="strengthValue">100%</output></div>
+          <input id="strength" type="range" min="20" max="100" value="100" disabled />
+        </div>
+        <div class="control">
+          <div class="control-head"><label for="angle">Tolerancia de plano</label><output id="angleValue">8°</output></div>
+          <input id="angle" type="range" min="3" max="20" value="8" disabled />
+        </div>
+        <div class="control">
+          <div class="control-head"><label for="confidence">Exigencia geométrica</label><output id="confidenceValue">82%</output></div>
+          <input id="confidence" type="range" min="35" max="98" value="82" disabled />
+        </div>
+        <div class="control">
+          <div class="control-head"><label for="minRegion">Plano mínimo</label><output id="regionValue">160 caras</output></div>
+          <input id="minRegion" type="range" min="30" max="700" step="10" value="160" disabled />
+        </div>
+
+        <div class="section-label">Restricciones CAD</div>
+        <label class="toggle-row emphasized">
+          <span><strong>Permitir planos inclinados</strong><small>Destildado: fuerza la lectura 2.5D, con caras horizontales o verticales respecto del eje de extrusión inferido.</small></span>
+          <input id="allowTiltedPlanes" type="checkbox" disabled />
+        </label>
+        <label class="toggle-row"><span><strong>Familias paralelas</strong><small>Unifica caras que probablemente fueron diseñadas paralelas.</small></span><input id="alignParallel" type="checkbox" checked disabled /></label>
+        <label class="toggle-row"><span><strong>Snap ortogonal 90°</strong><small>Reconstruye perpendicularidades exactas.</small></span><input id="orthogonalSnap" type="checkbox" checked disabled /></label>
+        <label class="toggle-row"><span><strong>Aristas por intersección</strong><small>Rectifica bordes bumpy entre planos aproximadamente perpendiculares.</small></span><input id="sharpIntersections" type="checkbox" checked disabled /></label>
+        <label class="toggle-row"><span><strong>Analizar espesores</strong><small>Busca separaciones repetidas entre planos paralelos.</small></span><input id="detectThickness" type="checkbox" checked disabled /></label>
+        <div class="control">
+          <div class="control-head"><label for="edgeProtect">Preservar zonas ambiguas</label><output id="edgeValue">55%</output></div>
+          <input id="edgeProtect" type="range" min="0" max="100" value="55" disabled />
+        </div>
       </div>
 
-      <div class="section-label">Geometría base</div>
-
-      <div class="control">
-        <div class="control-head"><label for="strength">Fuerza de reconstrucción</label><output id="strengthValue">100%</output></div>
-        <input id="strength" type="range" min="20" max="100" value="100" disabled />
-        <small>100% lleva las regiones confiables a su solución geométrica ideal.</small>
-      </div>
-
-      <div class="control">
-        <div class="control-head"><label for="angle">Tolerancia de plano</label><output id="angleValue">8°</output></div>
-        <input id="angle" type="range" min="3" max="20" value="8" disabled />
-        <small>Más bajo evita interpretar curvas y deformaciones como caras planas.</small>
-      </div>
-
-      <div class="control">
-        <div class="control-head"><label for="confidence">Exigencia geométrica</label><output id="confidenceValue">82%</output></div>
-        <input id="confidence" type="range" min="35" max="98" value="82" disabled />
-        <small>Rechaza regiones cuyo error respecto del plano ideal sea demasiado grande.</small>
-      </div>
-
-      <div class="control">
-        <div class="control-head"><label for="minRegion">Plano mínimo</label><output id="regionValue">160 caras</output></div>
-        <input id="minRegion" type="range" min="30" max="700" step="10" value="160" disabled />
-        <small>Los detalles menores quedan fuera de la inferencia de caras estructurales.</small>
-      </div>
-
-      <div class="section-label">Restricciones CAD</div>
-
-      <label class="toggle-row">
-        <span><strong>Familias paralelas</strong><small>Hace compartir dirección a caras que claramente fueron diseñadas paralelas.</small></span>
-        <input id="alignParallel" type="checkbox" checked disabled />
-      </label>
-
-      <label class="toggle-row">
-        <span><strong>Snap ortogonal 90°</strong><small>Cuando dos familias están casi a escuadra, reconstruye una perpendicularidad exacta.</small></span>
-        <input id="orthogonalSnap" type="checkbox" checked disabled />
-      </label>
-
-      <label class="toggle-row">
-        <span><strong>Aristas por intersección</strong><small>Dos planos a ~90° generan una línea ideal recta en vez de conservar un borde bumpy.</small></span>
-        <input id="sharpIntersections" type="checkbox" checked disabled />
-      </label>
-
-      <label class="toggle-row">
-        <span><strong>Analizar espesores</strong><small>Busca separaciones repetidas entre planos paralelos como candidatos a espesores nominales.</small></span>
-        <input id="detectThickness" type="checkbox" checked disabled />
-      </label>
-
-      <div class="control">
-        <div class="control-head"><label for="edgeProtect">Preservar zonas ambiguas</label><output id="edgeValue">55%</output></div>
-        <input id="edgeProtect" type="range" min="0" max="100" value="55" disabled />
-        <small>Reduce la corrección donde confluyen demasiadas superficies o la intención no está clara.</small>
+      <div id="legacyControls" class="hidden">
+        <div class="mission-card legacy-card">
+          <strong>Motor anterior v2</strong>
+          <span>La versión simple que solo detectaba regiones planas y las proyectaba. Ahora se muestra sola, sin quedar mezclada visualmente con el scan.</span>
+        </div>
+        <div class="control"><div class="control-head"><label for="legacyStrength">Fuerza CAD</label><output id="legacyStrengthValue">65%</output></div><input id="legacyStrength" type="range" min="0" max="100" value="65" disabled /></div>
+        <div class="control"><div class="control-head"><label for="legacyAngle">Tolerancia de plano</label><output id="legacyAngleValue">12°</output></div><input id="legacyAngle" type="range" min="4" max="28" value="12" disabled /></div>
+        <div class="control"><div class="control-head"><label for="legacyMinRegion">Tamaño mínimo</label><output id="legacyRegionValue">60 caras</output></div><input id="legacyMinRegion" type="range" min="12" max="300" step="4" value="60" disabled /></div>
       </div>
 
       <div class="actions">
@@ -124,7 +119,7 @@
       </div>
 
       <div id="resultCard" class="result-card hidden">
-        <strong id="resultTitle">Reconstrucción terminada</strong>
+        <strong id="resultTitle">Procesamiento terminado</strong>
         <span id="resultText"></span>
         <div id="cadFacts" class="cad-facts"></div>
       </div>
@@ -133,7 +128,7 @@
         <button id="exportStlBtn" class="ghost" disabled>Guardar STL</button>
         <button id="exportObjBtn" class="ghost" disabled>Guardar OBJ</button>
       </div>
-      <p class="roadmap-note">v3 reconstruye planos y aristas. La etapa siguiente del motor es inferir y regenerar fillets/radios constantes sobre esas aristas.</p>
+      <p class="roadmap-note">El siguiente paso del motor CAD es regenerar fillets/radios constantes después de reconstruir planos y aristas.</p>
     </section>
   </main>
 
