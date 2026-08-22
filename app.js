@@ -20,9 +20,14 @@ const originalView = $('originalView');
 const cleanView = $('cleanView');
 const strength = $('strength');
 const angle = $('angle');
+const confidence = $('confidence');
+const edgeProtect = $('edgeProtect');
 const minRegion = $('minRegion');
+const alignParallel = $('alignParallel');
 const strengthValue = $('strengthValue');
 const angleValue = $('angleValue');
+const confidenceValue = $('confidenceValue');
+const edgeValue = $('edgeValue');
 const regionValue = $('regionValue');
 const busy = $('busy');
 const dropHint = $('dropHint');
@@ -117,6 +122,8 @@ $('wireBtn').addEventListener('click', () => {
 
 strength.addEventListener('input', () => strengthValue.value = `${strength.value}%`);
 angle.addEventListener('input', () => angleValue.value = `${angle.value}°`);
+confidence.addEventListener('input', () => confidenceValue.value = `${confidence.value}%`);
+edgeProtect.addEventListener('input', () => edgeValue.value = `${edgeProtect.value}%`);
 minRegion.addEventListener('input', () => regionValue.value = `${minRegion.value} caras`);
 
 originalView.addEventListener('click', () => showGeometry('original'));
@@ -178,8 +185,7 @@ async function loadFile(file) {
       obj.traverse(child => {
         if (!child.isMesh || !child.geometry?.attributes?.position) return;
         const g = new THREE.BufferGeometry();
-        const p = child.geometry.attributes.position.clone();
-        g.setAttribute('position', p);
+        g.setAttribute('position', child.geometry.attributes.position.clone());
         g.applyMatrix4(child.matrixWorld);
         geos.push(g);
       });
@@ -265,7 +271,7 @@ function fitCamera() {
 }
 
 function setControlsEnabled(enabled) {
-  [changeBtn, analyzeBtn, resetBtn, originalView, strength, angle, minRegion].forEach(el => el.disabled = !enabled);
+  [changeBtn, analyzeBtn, resetBtn, originalView, strength, angle, confidence, edgeProtect, minRegion, alignParallel].forEach(el => el.disabled = !enabled);
 }
 
 function setBusy(on) { busy.classList.toggle('hidden', !on); }
@@ -283,7 +289,7 @@ function runCleanup() {
   if (!index) return alert('No pude indexar este mesh.');
   const faceCount = index.count / 3;
   if (faceCount > 750000) {
-    return alert(`Este MVP limita el análisis CAD a 750.000 caras para cuidar la memoria del celular. Tu modelo tiene ${Math.round(faceCount).toLocaleString('es-AR')}. Podemos subir ese límite después de probar rendimiento.`);
+    return alert(`El análisis CAD está limitado por ahora a 750.000 caras para cuidar la memoria del celular. Tu modelo tiene ${Math.round(faceCount).toLocaleString('es-AR')}.`);
   }
 
   setBusy(true);
@@ -309,7 +315,8 @@ function runCleanup() {
     exportStlBtn.disabled = false;
     exportObjBtn.disabled = false;
     showGeometry('clean');
-    resultText.textContent = `${data.regions} regiones planas corregidas · ${data.verticesMoved.toLocaleString('es-AR')} vértices ajustados · ${(data.elapsedMs/1000).toFixed(1)} s`;
+    const parallelText = data.parallelFamilies ? ` · ${data.parallelFamilies} familias paralelas` : '';
+    resultText.textContent = `${data.regions} planos aceptados · ${data.rejectedRegions} regiones dudosas descartadas${parallelText} · ${data.verticesMoved.toLocaleString('es-AR')} vértices corregidos · ${(data.elapsedMs/1000).toFixed(1)} s`;
     resultCard.classList.remove('hidden');
     analyzeBtn.disabled = false;
     setBusy(false);
@@ -324,7 +331,10 @@ function runCleanup() {
     type:'clean', positions, indices,
     strength: Number(strength.value)/100,
     angleDeg: Number(angle.value),
-    minRegionFaces: Number(minRegion.value)
+    minRegionFaces: Number(minRegion.value),
+    planeConfidence: Number(confidence.value)/100,
+    edgeProtection: Number(edgeProtect.value)/100,
+    alignParallel: alignParallel.checked
   }, [positions.buffer, indices.buffer]);
 }
 
